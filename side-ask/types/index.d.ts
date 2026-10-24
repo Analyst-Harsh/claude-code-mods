@@ -9,7 +9,6 @@ declare module 'claude-code' {
       groups: Group[]
       busy: string[]
       tick: number
-      isOpen: boolean
       typingSide: boolean
     }
   }

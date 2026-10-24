@@ -13,12 +13,12 @@ const SPIN = ["✻", "✳", "✢", "·"];
 const groups = atom({ plugin: "side-ask", key: "groups" } as const, []);
 const busy = atom({ plugin: "side-ask", key: "busy" } as const, []); // the questions being asked, oldest first
 const tick = atom({ plugin: "side-ask", key: "tick" } as const, 0);
-const isOpen = atom({ plugin: "side-ask", key: "isOpen" } as const, false);
-const typingSide = atom({ plugin: "side-ask", key: "typingSide" } as const, false); // the draft starts with ";"
+const typingSide = atom({ plugin: "side-ask", key: "typingSide" } as const, false); // the draft is a side trigger so far
 
 // `;` alone, or `;e`/`;w`/`;p`/`;v`, asks a preset; `; text` asks the text; `;x` closes.
-// The second group stops a pasted line of code that merely starts with ";" from matching.
-const TRIGGER = /^;([ewpvx]?)(?:\s+([\s\S]*))?$/;
+// The second group stops a pasted line of code that merely starts with ";" from matching;
+// one line only, so a multi-line draft (asm, INI or Lisp comments) is never asked or wiped.
+const TRIGGER = /^[ \t]*;([ewpvx]?)(?:[ \t]+([^\n]*))?$/;
 const PRESETS: Record<string, { q: string; color: ThemeKey }> = {
   "": { q: "Explain this simply, as to a junior developer.", color: "success" },
   e: { q: "Show a minimal code example of this.", color: "suggestion" },
@@ -28,6 +28,7 @@ const PRESETS: Record<string, { q: string; color: ThemeKey }> = {
 };
 // Shown after the engine's "Prompt dropped by a hook:" (a row when idle, a passing notice mid-turn); never sent to the model.
 const DROP = "asked on the side ↗";
+const CLOSED = "side pane closed";
 // The keys as the pane and the prompt hint show them: each in its preset's theme colour.
 const KEYS: [string, string, ThemeKey][] = [
   [";", "ask", PRESETS[""]!.color],
@@ -87,6 +88,8 @@ const why = (r: Extract<ModelForkResult, { isAnswered: false }>) => {
       return "Got an empty answer. Try rephrasing.";
     case "api-error":
       return API_ERRORS[r.error] ?? `No answer: API error (${r.error}).`;
+    default: // a reason a newer engine adds
+      return `No answer (${(r as { reason: string }).reason}).`;
   }
 };
 
@@ -138,7 +141,7 @@ async function groupFor($: EngineInterface, got: Selection) {
     return current;
   }
   const group: Group = { id: newId(), excerpt: isNew ? sel : "", source: await findSource($, isNew ? sel : ""), turns: [] };
-  await update($, groups, (l) => [...l.filter((g) => g.turns.length > 0), group]);
+  await update($, groups, (l) => [...l, group]);
   redraw($);
   return group;
 }
@@ -163,7 +166,10 @@ async function ask($: EngineInterface, group: Group, q: string, color: ThemeKey)
   } catch (err) {
     turn = { id: newId(), q, color, meta: "", isError: true, a: `No answer: ${String(err)}` };
   } finally {
-    await update($, busy, (l) => l.filter((x, i) => i !== l.indexOf(q)));
+    // After a close, `busy` was wiped and may hold a newer ask of the same question.
+    if (asked === epoch) {
+      await update($, busy, (l) => l.filter((x, i) => i !== l.indexOf(q)));
+    }
     redraw($);
   }
   // A close wiped the history while this was asking; the answer belongs to it.
@@ -171,14 +177,13 @@ async function ask($: EngineInterface, group: Group, q: string, color: ThemeKey)
     return;
   }
   await update($, groups, (list) => {
-    // An overlapping ask can drop this group while it was still empty; put it back with its answer.
-    const next = list.some((g) => g.id === group.id)
-      ? list.map((g) => (g.id === group.id ? { ...g, turns: [...g.turns, turn] } : g))
-      : [...list, { ...group, turns: [turn] }];
-    // ponytail: drops whole oldest groups past MAX_TURNS; trim per turn if long sessions need it.
+    const next = list.map((g) => (g.id === group.id ? { ...g, turns: [...g.turns, turn] } : g));
     while (next.length > 1 && next.reduce((n, g) => n + g.turns.length, 0) > MAX_TURNS) {
       next.shift();
     }
+    // One excerpt asked about past the cap keeps only its latest turns.
+    const last = next.at(-1)!;
+    next[next.length - 1] = { ...last, turns: last.turns.slice(-MAX_TURNS) };
     return next;
   });
   redraw($);
@@ -199,7 +204,6 @@ async function sideAsk($: EngineInterface, typed: string, jumped: boolean) {
   // Opened before the person's hook returns: from Enter that is asked and placed at any width.
   const draw = paneDrawn($);
   const opened = await $.ui.open(OPEN);
-  await update($, isOpen, () => true);
   redraw($);
   if (opened.isPlaced) {
     // An edit leaves the chat where it was: the dock's reflow only drifts the selected line a few rows,
@@ -254,24 +258,24 @@ export const register: Register = (on) => {
 
   // `; question` + Enter: dropped before it becomes a turn, answered in the pane.
   // Submitting jumps the chat to its end; sideAsk brings the selected message back.
-  on("prompt.submit", { text: TRIGGER }, async ($, e) => {
+  on("prompt.submit", { text: TRIGGER, origin: { kind: "composer" } }, async ($, e) => {
     await sideAsk($, e.text, true);
     clearPrompt($, e.text);
 
-    return { drop: DROP };
+    return { drop: TRIGGER.exec(e.text)?.[1] === "x" ? CLOSED : DROP };
   }).catch(($, e, next) => (next.called ? next(e) : { drop: "side-ask failed" }));
 
   // `; question` + a newline (shift+enter, option+enter, ctrl+j, \ Enter) is an edit, not a submit: the chat stays put.
   on("prompt.edit", async ($, e, next) => {
     const typed = e.text.replace(/\\\s*$/, ""); // `\ Enter` leaves its backslash in the draft
-    if (e.inputText === "\n" && TRIGGER.test(typed.trim())) {
-      // Awaited so the toast and the scroll back happen inside the person's edit.
-      await sideAsk($, typed, false).catch(() => undefined);
+    if (e.inputText === "\n" && TRIGGER.test(typed)) {
+      // Awaited so the toast and the scroll back happen inside the person's edit. A throw fails open: the draft stays.
+      await sideAsk($, typed, false);
       return { text: "", cursor: 0 };
     }
     // `e.text` is the draft before this edit; the hint follows the draft after it.
     const r = await next(e);
-    const typing = r.text.startsWith(";");
+    const typing = TRIGGER.test(r.text);
     if (typing !== (await read($, typingSide))) {
       await update($, typingSide, () => typing);
       redraw($);
@@ -290,7 +294,6 @@ export const register: Register = (on) => {
 
   on("command.run", { command: "side" }, async ($) => {
     await $.ui.open(OPEN);
-    await update($, isOpen, () => true);
     redraw($);
 
     return {};
@@ -303,7 +306,6 @@ export const register: Register = (on) => {
       epoch++;
       await update($, groups, () => []);
       await update($, busy, () => []);
-      await update($, isOpen, () => false);
       redraw($);
     }
 
@@ -399,7 +401,8 @@ export const register: Register = (on) => {
           </Box>
         ))}
 
-        {[...list].reverse().map((g) => (
+        {/* An empty group other than the current one is an ask still on its way. */}
+        {[...list].filter((g) => g === current || g.turns.length).reverse().map((g) => (
           <Box key={g.id} flexDirection="column" gap={1}>
             {g !== current && g.turns.length > 0 && (
               <Text color="subtle">── "{cut(g.excerpt || "last reply", Math.max(8, width - 22))}" ── {g.turns.length}</Text>

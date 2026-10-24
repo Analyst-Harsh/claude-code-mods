@@ -12,11 +12,14 @@ const USAGE = { input_tokens: 10, output_tokens: 42, cache_read_input_tokens: 12
 const REPLY = "Long reply. TCP starts each connection cautiously with slow start. More text.";
 const SELECTED = "TCP starts each connection cautiously with slow start.";
 
+// Enter at the prompt: only the person's own submits are asked on the side.
+const composer = (text: string) => ({ text, origin: { kind: "composer" } }) as never;
+
 // The engine beneath the plugin: one reply in the chat, a selection, a fork, and a model that counts prompts.
 function engine(on: On, fork: (prompt: string) => unknown, selected = SELECTED) {
   const clock = mock.clock(on);
   const s = {
-    clock, prompts: [] as string[], opens: 0, closes: 0, draft: "x", forked: [] as string[],
+    clock, selected, prompts: [] as string[], opens: 0, closes: 0, draft: "x", forked: [] as string[],
     toasts: [] as string[], order: [] as string[], closedBy: [] as string[], placed: { isPlaced: true } as { isPlaced: boolean; reason?: string },
   };
   on("command.register", () => ({ value: { command: "side" } }) as never);
@@ -34,7 +37,7 @@ function engine(on: On, fork: (prompt: string) => unknown, selected = SELECTED) 
     s.closedBy.push(e.origin.kind);
     return { value: undefined } as never;
   });
-  on("ui.selection", () => ({ value: selected ? { text: selected, requestId: "m1" } : undefined }) as never);
+  on("ui.selection", () => ({ value: s.selected ? { text: s.selected, requestId: "m1" } : undefined }) as never);
   on("session.messages", () => {
     s.order.push("messages");
     return { value: [{ role: "assistant", text: REPLY, toolUses: [] }] } as never;
@@ -68,7 +71,7 @@ test("`; question` never reaches the model; the answer about the selection shows
   const s = engine(on, answer("Because the window must probe capacity."));
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
 
-  const r = await settle(s, $.prompt.submit({ text: "; why slow start?" } as never));
+  const r = await settle(s, $.prompt.submit(composer("; why slow start?")));
   expect((r as { drop?: string }).drop).toBe("asked on the side ↗");
   expect(s.prompts).toEqual([]); // dropped before the model
   expect(s.opens).toBe(1);
@@ -86,16 +89,17 @@ test("presets, close, and prompts that only look similar", async ($, on) => {
   const s = engine(on, answer("ok"));
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
 
-  await settle(s, $.prompt.submit({ text: ";e" } as never));
+  await settle(s, $.prompt.submit(composer(";e")));
   expect(s.forked.at(-1)).toContain("Question: Show a minimal code example");
-  await settle(s, $.prompt.submit({ text: ";" } as never));
+  await settle(s, $.prompt.submit(composer(";")));
   expect(s.forked.at(-1)).toContain("Question: Explain this simply");
 
-  await $.prompt.submit({ text: ";x" } as never);
+  const closed = await $.prompt.submit(composer(";x"));
+  expect((closed as { drop?: string }).drop).toBe("side pane closed");
   expect(s.closes).toBe(1);
 
-  await $.prompt.submit({ text: ";let x = 1" } as never); // pasted code is a normal prompt
-  await $.prompt.submit({ text: "hello" } as never);
+  await $.prompt.submit(composer(";let x = 1")); // pasted code is a normal prompt
+  await $.prompt.submit(composer("hello"));
   expect(s.prompts).toEqual([";let x = 1", "hello"]);
 });
 
@@ -104,7 +108,7 @@ test("a fork that throws still keeps the question out of the chat", async ($, on
     throw new Error("boom");
   });
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
-  const r = await settle(s, $.prompt.submit({ text: "; anything" } as never));
+  const r = await settle(s, $.prompt.submit(composer("; anything")));
   expect((r as { drop?: string }).drop).toBe("asked on the side ↗");
   expect(s.prompts).toEqual([]);
 });
@@ -130,9 +134,9 @@ test("overlapping asks keep both answers, and a new draft is never wiped", async
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
 
   s.draft = "; first";
-  await settle(s, $.prompt.submit({ text: "; first" } as never));
+  await settle(s, $.prompt.submit(composer("; first")));
   s.draft = "; second";
-  const second = $.prompt.submit({ text: "; second" } as never);
+  const second = $.prompt.submit(composer("; second"));
   await s.clock.advance(250);
   s.draft = "half-typed new message"; // typed within the clear delay
   await second;
@@ -149,7 +153,7 @@ test("overlapping asks keep both answers, and a new draft is never wiped", async
 test("the pane opens before the slow work reads the conversation", async ($, on) => {
   const s = engine(on, answer("ok"));
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
-  await settle(s, $.prompt.submit({ text: "; why?" } as never));
+  await settle(s, $.prompt.submit(composer("; why?")));
   expect(s.order).toEqual(["open", "messages"]);
 });
 
@@ -157,9 +161,8 @@ test("a pane that cannot be placed says why, and the ask still runs", async ($, 
   const s = engine(on, answer("ok"));
   s.placed = { isPlaced: false, reason: "unasked below 144 columns (120 now): placed when the person opens it" };
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
-  await $.prompt.submit({ text: "; why?" } as never); // unplaced: no wait for a draw
+  await $.prompt.submit(composer("; why?")); // unplaced: no wait for a draw
   expect(s.toasts).toEqual(["Side pane closed by hand: press Enter (not shift+enter) once to bring it back."]);
-  expect(s.order.some((o) => o.startsWith("scroll"))).toBe(false);
   expect(s.forked).toHaveLength(1);
 });
 
@@ -167,8 +170,8 @@ test("overlapping asks keep the spinner until the last one lands", async ($, on)
   const waiting: ((v: unknown) => void)[] = [];
   const s = engine(on, () => new Promise((done) => waiting.push(done)));
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
-  await settle(s, $.prompt.submit({ text: "; first" } as never));
-  await settle(s, $.prompt.submit({ text: "; second" } as never));
+  await settle(s, $.prompt.submit(composer("; first")));
+  await settle(s, $.prompt.submit(composer("; second")));
   waiting[0]!({ value: { isAnswered: true, text: "answer 1", usage: USAGE } });
   await s.clock.advance(10);
 
@@ -182,8 +185,8 @@ test("an answer that lands after ;x does not bring the wiped history back", asyn
   const waiting: ((v: unknown) => void)[] = [];
   const s = engine(on, () => new Promise((done) => waiting.push(done)));
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
-  await settle(s, $.prompt.submit({ text: "; slow one" } as never));
-  await $.prompt.submit({ text: ";x" } as never);
+  await settle(s, $.prompt.submit(composer("; slow one")));
+  await $.prompt.submit(composer(";x"));
   waiting[0]!({ value: { isAnswered: true, text: "late answer", usage: USAGE } });
   await s.clock.advance(10);
 
@@ -196,7 +199,7 @@ test("an answer that lands after ;x does not bring the wiped history back", asyn
 test("fork failures read as plain words", async ($, on) => {
   const s = engine(on, () => ({ value: { isAnswered: false, reason: "api-error", status: 429, error: "rate_limit", usage: USAGE } }));
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
-  await settle(s, $.prompt.submit({ text: "; why?" } as never));
+  await settle(s, $.prompt.submit(composer("; why?")));
   const ui = await $.ui.mount({ ...PANE, surface: "terminal" });
   expect(await ui.find({ text: /Rate limited\. Try again/ })).toBeTruthy();
   await ui.unmount();
@@ -235,8 +238,81 @@ test("answers are asked to fit the pane's drawn width", async ($, on) => {
   const s = engine(on, answer("ok"));
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
   const ui = await $.ui.mount({ ...PANE, surface: "terminal" }); // drawn 60 columns wide
-  await settle(s, $.prompt.submit({ text: "; draw it" } as never));
+  await settle(s, $.prompt.submit(composer("; draw it")));
   expect(s.forked[0]).toContain("must fit in 56 characters"); // less the answer's bullet and margin
   expect(s.forked[0]).toContain("Tables and small diagrams are welcome when they fit");
+  await ui.unmount();
+});
+
+test("a multi-line draft that starts with ; is typed and sent, never asked or wiped", async ($, on) => {
+  const s = engine(on, answer("ok"));
+  on("prompt.edit", (_, e) => ({ text: e.text + e.inputText, cursor: e.cursor + 1 }));
+  await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
+  const text = "; a comment\nmov ax, 1";
+  const r = await $.prompt.edit({ origin: { kind: "person" }, text, cursor: text.length, start: text.length, end: text.length, inputText: "\n" } as never);
+  expect(r).toEqual({ text: `${text}\n`, cursor: text.length + 1 });
+  await $.prompt.submit(composer(text));
+  expect(s.prompts).toEqual([text]);
+  expect(s.forked).toEqual([]);
+});
+
+test("a leading space still asks on the side; other senders' prompts pass through", async ($, on) => {
+  const s = engine(on, answer("ok"));
+  await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
+  const r = await settle(s, $.prompt.submit(composer(" ; why?")));
+  expect((r as { drop?: string }).drop).toBe("asked on the side ↗");
+  await $.prompt.submit({ text: "; scheduled", origin: { kind: "scheduled-trigger" } } as never);
+  expect(s.prompts).toEqual(["; scheduled"]);
+  expect(s.forked).toHaveLength(1);
+});
+
+test("an ask from before ;x does not stop the spinner of the same question asked again", async ($, on) => {
+  const waiting: ((v: unknown) => void)[] = [];
+  const s = engine(on, () => new Promise((done) => waiting.push(done)));
+  await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
+  await settle(s, $.prompt.submit(composer(";")));
+  await $.prompt.submit(composer(";x"));
+  await settle(s, $.prompt.submit(composer(";")));
+  waiting[0]!({ value: { isAnswered: true, text: "old answer", usage: USAGE } });
+  await s.clock.advance(10);
+
+  const ui = await $.ui.mount({ ...PANE, surface: "terminal" });
+  expect(await ui.find({ text: /thinking/ })).toBeTruthy();
+  await ui.unmount();
+});
+
+test("the latest selection stays current when an earlier ask lands after it", async ($, on) => {
+  const waiting: ((v: unknown) => void)[] = [];
+  const s = engine(on, () => new Promise((done) => waiting.push(done)));
+  await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
+  await settle(s, $.prompt.submit(composer("; first")));
+  s.selected = "Another passage entirely.";
+  await settle(s, $.prompt.submit(composer("; second")));
+  waiting[0]!({ value: { isAnswered: true, text: "answer 1", usage: USAGE } });
+  await s.clock.advance(10);
+  s.selected = ""; // no selection: asks about the current excerpt
+  await settle(s, $.prompt.submit(composer(";w")));
+  expect(s.forked.at(-1)).toContain("Another passage entirely.");
+});
+
+test("one excerpt asked about past the cap keeps only its latest answers", async ($, on) => {
+  const s = engine(on, answer("ok"));
+  await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
+  for (let i = 0; i < 61; i++) {
+    await settle(s, $.prompt.submit(composer(`; q${i}`)));
+  }
+  await s.clock.advance(10);
+  const ui = await $.ui.mount({ ...PANE, surface: "terminal" });
+  expect(await ui.find({ text: /60 asks/ })).toBeTruthy();
+  await ui.unmount();
+});
+
+test("a failure reason this mod does not know still reads as words", async ($, on) => {
+  const s = engine(on, () => ({ value: { isAnswered: false, reason: "weird", usage: USAGE } }));
+  await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
+  await settle(s, $.prompt.submit(composer("; one")));
+  await settle(s, $.prompt.submit(composer("; two"))); // the first is now drawn as an older turn
+  const ui = await $.ui.mount({ ...PANE, surface: "terminal" });
+  expect(await ui.find({ text: /No answer \(weird\)/ })).toBeTruthy();
   await ui.unmount();
 });

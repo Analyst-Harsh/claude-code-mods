@@ -1,0 +1,1 @@
+{ "name": "side-ask", "version": "0.6.0", "author": { "name": "Analyst-Harsh" }, "description": "Select text in a reply, type ; and a question, press shift+enter: the answer shows in a side pane and never enters the main context", "types": "./types/index.d.ts" }

@@ -1,0 +1,13 @@
+{
+  "name": "claude-code-mods",
+  "description": "Mods for Claude Code's own interface: panes, bands and prompt tricks.",
+  "owner": {
+    "name": "Analyst-Harsh"
+  },
+  "plugins": [
+    {
+      "name": "side-ask",
+      "source": "./side-ask"
+    }
+  ]
+}

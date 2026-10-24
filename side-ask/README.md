@@ -7,7 +7,7 @@
 
 **Ask about any part of Claude's reply. The answer lives in a side pane, never in your context.**
 
-[![version](https://img.shields.io/badge/version-0.7.0-d97757?style=flat-square)](../CHANGELOG.md)
+[![release](https://img.shields.io/github/v/release/Analyst-Harsh/claude-code-mods?filter=side-ask-v*&label=release&color=d97757&style=flat-square)](https://github.com/Analyst-Harsh/claude-code-mods/releases)
 [![tests](https://img.shields.io/badge/tests-18%20passing-4eba65?style=flat-square)](hooks/register.test.tsx)
 [![license](https://img.shields.io/badge/license-MIT-7aa2f7?style=flat-square)](../LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.310-1f1e1d?style=flat-square)](https://claude.com/claude-code)

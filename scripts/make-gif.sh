@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Turn a screen recording into side-ask/docs/demo.gif.
+# Turn a screen recording into <mod>/docs/demo.gif (MOD=side-ask by default).
 # usage: scripts/make-gif.sh <recording.mov> [cuts] [crop w:h:x:y]
 #   cuts: the seconds to keep, e.g. "0.5-13.5,17.5-29.5,34-37.5" (default: all of it)
-# env:   FPS=15 WIDTH=900 SPEED=1.25 HOLD=1.5 MAX_MB=5
+# env:   MOD=side-ask FPS=15 WIDTH=900 SPEED=1.25 HOLD=1.5 MAX_MB=5
 set -euo pipefail
 
 in=${1:?usage: scripts/make-gif.sh <recording.mov> [cuts] [crop w:h:x:y]}
 cuts=${2:-} crop=${3:-}
 FPS=${FPS:-15} WIDTH=${WIDTH:-900} SPEED=${SPEED:-1.25} HOLD=${HOLD:-1.5} MAX_MB=${MAX_MB:-5}
-docs="$(cd "$(dirname "$0")/.." && pwd)/side-ask/docs"
+docs="$(cd "$(dirname "$0")/.." && pwd)/${MOD:-side-ask}/docs"; mkdir -p "$docs"
 
 for t in ffmpeg gifski; do command -v "$t" >/dev/null || brew install "$t"; done
 tmp=$(mktemp -d)

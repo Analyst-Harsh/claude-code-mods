@@ -54,6 +54,10 @@ Select text in a reply, type `; question` and press **shift+enter**. The answer 
 
 After each reply, a band above the prompt shows up to 3 likely next prompts, plus **yes, proceed** and **explain why**. Press a number or click one to fill the prompt. It never sends on its own.
 
+<div align="center">
+<img src="next-steps/docs/demo.gif" alt="next-steps demo: after Claude answers a question, a band lists 3 next steps; clicking one fills the prompt" width="100%">
+</div>
+
 ```
 /plugin install next-steps@claude-code-mods
 ```

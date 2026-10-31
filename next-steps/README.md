@@ -6,13 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.310-1f1e1d?style=flat-square)](https://claude.com/claude-code)
 [![mod](https://img.shields.io/badge/mod-early%20access-b18cf2?style=flat-square)](#notes--quirks)
 
-```
-▾ next steps  3
-┃ Run the tests in hooks/
-┃ Commit the README change
-┃ Tag next-steps-v0.1.0
-╰ ✓ yes, proceed   ? explain why
-```
+<img src="docs/demo.gif" alt="next-steps demo: after Claude answers a question, a band lists 3 next steps; clicking one fills the prompt" width="900">
 
 ## Install
 
@@ -39,7 +33,7 @@ Colors are Tokyo Night (Night), with the same accent as the status line (`#7aa2f
 - Reloading the mod cancels a fork that's still running, so the turn that edits the mod gets no band.
 - Mods loaded from `CLAUDE_CODE_PLUGIN_DIRS` load only when the process starts. `/clear` and `/compact` don't reload them.
 - Each suggestion is one extra small model call per reply.
-- To do: add a banner and a demo gif, like side-ask has.
+- To do: add a banner, like side-ask has.
 
 ## Develop
 

@@ -50,6 +50,16 @@ Select text in a reply, type `; question` and press **shift+enter**. The answer 
 
 **[Read more →](side-ask/)** · [Changelog](CHANGELOG.md#side-ask) · [Release](https://github.com/Analyst-Harsh/claude-code-mods/releases/tag/side-ask-v0.7.0)
 
+### next-steps <sub>`0.1.0`</sub>
+
+After each reply, a band above the prompt shows up to 3 likely next prompts, plus **yes, proceed** and **explain why**. Press a number or click one to fill the prompt. It never sends on its own.
+
+```
+/plugin install next-steps@claude-code-mods
+```
+
+**[Read more →](next-steps/)** · [Changelog](CHANGELOG.md#next-steps) · [Release](https://github.com/Analyst-Harsh/claude-code-mods/releases/tag/next-steps-v0.1.0)
+
 ## Adding a mod
 
 Put it in its own folder with a `.claude-plugin/plugin.json`, then add a line to `.claude-plugin/marketplace.json`:

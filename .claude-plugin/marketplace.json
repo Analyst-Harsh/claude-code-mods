@@ -8,6 +8,10 @@
     {
       "name": "side-ask",
       "source": "./side-ask"
+    },
+    {
+      "name": "next-steps",
+      "source": "./next-steps"
     }
   ]
 }

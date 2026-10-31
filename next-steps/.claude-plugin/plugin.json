@@ -1,0 +1,1 @@
+{ "name": "next-steps", "version": "0.1.0", "license": "MIT", "author": { "name": "Analyst-Harsh" }, "description": "Clickable band of Claude's proposed next steps above the prompt, Tokyo Night colors", "types": "./types/index.d.ts" }

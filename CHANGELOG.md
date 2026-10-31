@@ -24,3 +24,9 @@
 ### 0.6.0
 
 First release: select text, type `; question`, and press shift+enter. The answer shows in a side pane and never enters the conversation.
+
+## next-steps
+
+### 0.1.0
+
+First release: after each reply, a band above the prompt shows up to 3 likely next prompts plus "yes, proceed" and "explain why". Press a number or click one to fill the prompt; it never sends on its own.
